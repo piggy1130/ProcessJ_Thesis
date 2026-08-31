@@ -1,0 +1,137 @@
+import std.*;
+
+void control_A(
+    chan<boolean>.read  b_ready,
+    chan<boolean>.read  c_ready,
+    chan<boolean>.read  d_ready,
+    chan<int>.write b_start, 
+    chan<int>.write c_start, 
+    chan<int>.write d_start)
+{
+    long value = 0;
+    int i = 0;
+    int totalJobs = 0;
+    int laser_b_count = 0;
+    int laser_c_count = 0;
+    int laser_d_count = 0;
+    boolean any;
+
+    while (totalJobs<20){
+        alt{
+            any = b_ready.read():{
+                b_start.write(1);
+                //any = b_done.read();
+                totalJobs++;
+                laser_b_count++;
+            } 
+            any = c_ready.read():{
+                c_start.write(1);
+                //any = c_done.read();
+                totalJobs++;
+                laser_c_count++;
+            }
+            any = d_ready.read():{
+                d_start.write(1);
+                //any = d_done.read();
+                totalJobs++;
+                laser_d_count++;
+            }
+        }
+    }
+
+    println("Laser B have been call times: ---------------"+laser_b_count);
+    println("Laser C have been call times: ---------------"+laser_c_count);
+    println("Laser D have been call times: ---------------"+laser_d_count);
+    // tell lasers to stop
+    par{
+        b_ready.read();
+        c_ready.read();
+        d_ready.read();
+        b_start.write(0);
+        c_start.write(0);
+        d_start.write(0);
+    }
+    // b_ready.read();
+    // b_start.write(0);
+    // c_start.write(0);
+    // d_start.write(0);
+
+    println("Control_A finished.");
+}
+
+void laser_B(chan<boolean>.write b_ready, chan<int>.read b_start) {
+    int signal;
+    timer t;
+    b_ready.write(true);
+    int count = 1;
+    while (true) {
+        
+        signal = b_start.read();
+
+        if (signal == 0) {
+            println("Laser_B terminates.");
+            break;
+        }
+
+        println("Laser_B starts to work....time "+count);
+        count++;
+        jl_sleep(2000);
+        //t.timeout(200); // unit is ms
+        b_ready.write(true);
+    
+    }
+}
+
+void laser_C(chan<boolean>.write c_ready, chan<int>.read c_start) {
+    int signal;
+    timer t;
+    c_ready.write(true);
+    while (true) {
+        
+        signal = c_start.read();
+
+        if (signal == 0) {
+            println("Laser_C terminates.");
+            break;
+        }
+
+        println("Laser_C starts to work....");
+        jl_sleep(200);
+        //t.timeout(2000);
+        c_ready.write(true);
+        
+    }
+}
+
+void laser_D(chan<boolean>.write d_ready, chan<int>.read d_start) {
+    int signal;
+    timer t;
+    d_ready.write(true);
+    while (true) {
+        
+        signal = d_start.read();
+
+        if (signal == 0) {
+            println("Laser_D terminates.");
+            break;
+        }
+
+        println("Laser_D starts to work....");
+        jl_sleep(300);
+        //t.timeout(300);
+        d_ready.write(true);
+    }
+}
+
+public void main(string[] args) {
+    chan<int> b_start, c_start, d_start;
+    chan<boolean> b_ready, c_ready, d_ready;
+
+    par {
+        control_A(b_ready.read, c_ready.read, d_ready.read,
+                  b_start.write, c_start.write, d_start.write);
+        laser_B(b_ready.write, b_start.read);
+        laser_C(c_ready.write, c_start.read);
+        laser_D(d_ready.write, d_start.read);
+    }
+}
