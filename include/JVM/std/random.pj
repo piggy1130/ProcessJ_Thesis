@@ -7,3 +7,4 @@ package std;
 
 public native void initRandom(long seed);
 public native long longRandom();
+public native double doubleRandom_0_to_50();

@@ -18,38 +18,35 @@ public class gpio {
     private static Map<Integer, DigitalOutput> ledMap = new HashMap<>();
 
     private static DigitalOutput getLedOutput(int pinNumber) {
+        
         if (ledMap.containsKey(pinNumber)) {
             return ledMap.get(pinNumber);
         }
     
-    DigitalOutputConfigBuilder config = DigitalOutput.newConfigBuilder(pi4j)
-        .id("led-" + pinNumber)
-        .name("LED Pin " + pinNumber)
-        .address(pinNumber)
-        .shutdown(DigitalState.LOW)
-        .initial(DigitalState.LOW)
-        .provider("gpiod-digital-output");
-
+        DigitalOutputConfigBuilder config = DigitalOutput.newConfigBuilder(pi4j)
+            .id("led-" + pinNumber)
+            .name("LED Pin " + pinNumber)
+            .address(pinNumber)
+            .shutdown(DigitalState.LOW)
+            .initial(DigitalState.LOW)
+            .provider("gpiod-digital-output");
+        
         DigitalOutput led = pi4j.create(config.build());
-
+        
         ledMap.put(pinNumber, led);  // Save it for reuse
         return led;
     }
 
     public static void turnOnLed(int pinNumber) {
-        //synchronized (Pi4J.class) {
-            DigitalOutput led = getLedOutput(pinNumber);
-            System.out.println("[gpio] LED high - pin " + pinNumber);
-            led.high();
-        //}
+        DigitalOutput led = getLedOutput(pinNumber);
+        System.out.println("LED high - pin NO." + pinNumber);
+        led.high();
     }
 
     public static void turnOffLed(int pinNumber) {
-        //synchronized (Pi4J.class) {
-            DigitalOutput led = getLedOutput(pinNumber);
-            System.out.println("[gpio] LED low  - pin " + pinNumber);
-            led.low();
-        //}
+        DigitalOutput led = getLedOutput(pinNumber);
+        System.out.println("LED low - pin NO." + pinNumber);
+        led.low();
     }
 
     public static void shutdown() {

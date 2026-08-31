@@ -1,0 +1,230 @@
+import std.*;
+
+/*
+ * Finite baseline for the current ProcessJ JVM scheduler.
+ *
+ * Modes (selected by the first program argument):
+ *   all       - run every phase (the default)
+ *   channel   - fixed five-hop channel pipeline
+ *   blocked   - the same pipeline with parked processes in the run queue
+ *   timer     - park several processes on absolute timer deadlines
+ *
+ * Keep output out of the channel hot loops.  The scheduler prints its own
+ * context-switch count, maximum run-queue size, and total execution time when
+ * the program terminates.  Run channel and blocked as separate JVM processes
+ * when comparing timings; all is intended as a quick functional check.
+ */
+
+const long CHANNEL_MESSAGES = 100000;
+const int PIPELINE_STAGES = 4;
+const int PARKED_PROCESSES = 8; // Matches the explicit parked calls below.
+const int TIMER_PROCESSES = 8;
+const long TIMER_WAIT_MS = 500;
+
+public void channelSource(long messageCount, chan<long>.write out) {
+    long value = 0;
+
+    while (value < messageCount) {
+        out.write(value);
+        value = value + 1;
+    }
+}
+
+public void channelStage(long messageCount, chan<long>.read in,
+                         chan<long>.write out) {
+    long forwarded = 0;
+
+    while (forwarded < messageCount) {
+        long value = in.read();
+        out.write(value + 1);
+        forwarded = forwarded + 1;
+    }
+}
+
+public void channelSink(long messageCount, int stageCount,
+                        chan<long>.read in) {
+    long received = 0;
+    long checksum = 0;
+    long errors = 0;
+
+    while (received < messageCount) {
+        long value = in.read();
+
+        if (value != received + stageCount) {
+            errors = errors + 1;
+        }
+
+        checksum = checksum + value;
+        received = received + 1;
+    }
+
+    long expectedChecksum = (messageCount * (messageCount - 1)) / 2
+                            + messageCount * stageCount;
+
+    if (errors == 0 && checksum == expectedChecksum) {
+        println("[channel] PASS messages=" + received
+                + " checksum=" + checksum);
+    } else {
+        println("[channel] FAIL messages=" + received
+                + " errors=" + errors
+                + " checksum=" + checksum
+                + " expected=" + expectedChecksum);
+    }
+}
+
+public void channelSinkAndSignal(long messageCount, int stageCount,
+                                 chan<long>.read in,
+                                 chan<boolean>.write done) {
+    channelSink(messageCount, stageCount, in);
+    done.write(true);
+}
+
+public void parkedProcess(chan<boolean>.read release) {
+    release.read();
+}
+
+public void waitForCompletion(chan<boolean>.read done) {
+    done.read();
+}
+
+public void releaseParkedProcesses(chan<boolean>.read done,
+                                   chan<boolean>.write release0,
+                                   chan<boolean>.write release1,
+                                   chan<boolean>.write release2,
+                                   chan<boolean>.write release3,
+                                   chan<boolean>.write release4,
+                                   chan<boolean>.write release5,
+                                   chan<boolean>.write release6,
+                                   chan<boolean>.write release7) {
+    done.read();
+    release0.write(true);
+    release1.write(true);
+    release2.write(true);
+    release3.write(true);
+    release4.write(true);
+    release5.write(true);
+    release6.write(true);
+    release7.write(true);
+}
+
+public void runChannelBaseline() {
+    chan<long> c0, c1, c2, c3, c4;
+    chan<boolean> done;
+    timer clock;
+    long started = clock.read();
+
+    par {
+        channelSource(CHANNEL_MESSAGES, c0.write);
+        channelStage(CHANNEL_MESSAGES, c0.read, c1.write);
+        channelStage(CHANNEL_MESSAGES, c1.read, c2.write);
+        channelStage(CHANNEL_MESSAGES, c2.read, c3.write);
+        channelStage(CHANNEL_MESSAGES, c3.read, c4.write);
+        channelSinkAndSignal(CHANNEL_MESSAGES, PIPELINE_STAGES, c4.read,
+                             done.write);
+        waitForCompletion(done.read);
+    }
+
+    long elapsed = clock.read() - started;
+    long transfers = CHANNEL_MESSAGES * (PIPELINE_STAGES + 1);
+    println("[channel] transfers=" + transfers + " elapsed_ms=" + elapsed);
+}
+
+public void runBlockedQueueBenchmark() {
+    chan<long> c0, c1, c2, c3, c4;
+    chan<boolean> done;
+    chan<boolean> release0, release1, release2, release3;
+    chan<boolean> release4, release5, release6, release7;
+    timer clock;
+    long started = clock.read();
+
+    par {
+        // These are listed first so they park before the pipeline hot loop.
+        parkedProcess(release0.read);
+        parkedProcess(release1.read);
+        parkedProcess(release2.read);
+        parkedProcess(release3.read);
+        parkedProcess(release4.read);
+        parkedProcess(release5.read);
+        parkedProcess(release6.read);
+        parkedProcess(release7.read);
+        channelSource(CHANNEL_MESSAGES, c0.write);
+        channelStage(CHANNEL_MESSAGES, c0.read, c1.write);
+        channelStage(CHANNEL_MESSAGES, c1.read, c2.write);
+        channelStage(CHANNEL_MESSAGES, c2.read, c3.write);
+        channelStage(CHANNEL_MESSAGES, c3.read, c4.write);
+        channelSinkAndSignal(CHANNEL_MESSAGES, PIPELINE_STAGES, c4.read,
+                             done.write);
+        releaseParkedProcesses(done.read, release0.write, release1.write,
+                               release2.write, release3.write, release4.write,
+                               release5.write, release6.write, release7.write);
+    }
+
+    long elapsed = clock.read() - started;
+    long transfers = CHANNEL_MESSAGES * (PIPELINE_STAGES + 1);
+    println("[blocked] parked=" + PARKED_PROCESSES
+            + " transfers=" + transfers
+            + " elapsed_ms=" + elapsed);
+}
+
+public void timerProcess(int id, long waitMs) {
+    timer clock;
+    long started = clock.read();
+    long deadline = started + waitMs;
+
+    // The current JVM runtime expects an absolute epoch-millisecond deadline.
+    clock.timeout(deadline);
+
+    long elapsed = clock.read() - started;
+    if (elapsed >= waitMs) {
+        println("[timer " + id + "] PASS elapsed_ms=" + elapsed);
+    } else {
+        println("[timer " + id + "] FAIL elapsed_ms=" + elapsed
+                + " expected_at_least_ms=" + waitMs);
+    }
+}
+
+public void runTimerBenchmark() {
+    timer clock;
+    long started = clock.read();
+
+    par for (int worker = 0; worker < TIMER_PROCESSES; ++worker) {
+        timerProcess(worker, TIMER_WAIT_MS);
+    }
+
+    long elapsed = clock.read() - started;
+    println("[timer] processes=" + TIMER_PROCESSES
+            + " requested_ms=" + TIMER_WAIT_MS
+            + " elapsed_ms=" + elapsed);
+}
+
+public void main(string[] args) {
+    if (args.size == 0) {
+        runChannelBaseline();
+        runBlockedQueueBenchmark();
+        runTimerBenchmark();
+    } else {
+        // Assign native string comparisons before testing them.  The current
+        // JVM code generator does not render a native call directly in an
+        // if-condition correctly.
+        boolean allMode = equals(args[0], "all");
+        boolean channelMode = equals(args[0], "channel");
+        boolean blockedMode = equals(args[0], "blocked");
+        boolean timerMode = equals(args[0], "timer");
+
+        if (allMode || channelMode) {
+            runChannelBaseline();
+        }
+
+        if (allMode || blockedMode) {
+            runBlockedQueueBenchmark();
+        }
+
+        if (allMode || timerMode) {
+            runTimerBenchmark();
+        }
+
+        if (!allMode && !channelMode && !blockedMode && !timerMode) {
+            println("Usage: scheduler_benchmark [all|channel|blocked|timer]");
+        }
+    }
+}

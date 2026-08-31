@@ -1,0 +1,46 @@
+import std.*;
+
+public void T_measure(chan<boolean>.read in, chan<double>.write out){
+    // measure the temp & send as the start
+    double temp_manualCS_6 = readTemp_HwSPI_ManualCS(26);
+    println("Measure temp:  " + temp_manualCS_6);
+    out.write(temp_manualCS_6);
+    
+    // start the loop  
+    while (true) {
+        in.read();
+        temp_manualCS_6 = readTemp_HwSPI_ManualCS(26);
+        println("Measure temp:  " + temp_manualCS_6);
+        out.write(temp_manualCS_6);
+    }
+}
+
+public void T_control(chan<double>.read out, chan<boolean>.write in){
+    double t_curr;
+    while (true) {
+        t_curr = out.read();
+        println("Get current temp:  " + t_curr);
+
+        if (40 - t_curr > 0 ){
+            // turn on baking for 5s
+            turnOnLed(27);                                                                  
+            jl_sleep(5000);
+            in.write(true);
+        }
+        else{
+            turnOffLed(27);
+            jl_sleep(5000);
+            in.write(true);
+        }
+    }
+}
+
+public void main(string[] args){
+    chan<double> out;
+    chan<boolean> in;
+    par{
+        T_measure(in.read, out.write);
+        T_control(out.read, in.write);
+
+    }
+}

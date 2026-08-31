@@ -106,13 +106,13 @@ public class MAX31855_reader {
         for (int i = 0; i < 5; i++) {
             try {
                 // Manual CS on GPIO16
-                double t_gpio16 = readTemp_HwSPI_ManualCS(16);
+                double t_gpio26 = readTemp_HwSPI_ManualCS(26);
 
                 // Hardware CS on CE0 (GPIO8)
-                double t_gpio8  = readTemp_HwCS(8);
+                //double t_gpio8  = readTemp_HwCS(8);
 
-                System.out.printf("CE0(GPIO8) = %.2f °C%n", t_gpio8);
-                System.out.printf("GPIO16     = %.2f °C%n%n", t_gpio16);
+                //System.out.printf("CE0(GPIO8) = %.2f °C%n", t_gpio8);
+                System.out.printf("GPIO16     = %.2f °C%n%n", t_gpio26);
 
                 Thread.sleep(1500);
 

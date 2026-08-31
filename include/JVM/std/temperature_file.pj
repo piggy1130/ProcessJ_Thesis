@@ -1,0 +1,8 @@
+#pragma LIBRARY;
+#pragma NATIVE;
+#pragma FILE "temperature_file";
+#pragma LANGUAGE "JVM";
+
+package std;
+
+public native void writeTemperature(string filename, double temperature, boolean append);

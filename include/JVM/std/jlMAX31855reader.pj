@@ -5,6 +5,8 @@
 
 package std;
 
-public native double readTemp_HwCS(int gpioPin);
+public native void initMAX31855();
+public native void shutdown();
 public native double readTemp_HwSPI_ManualCS(int csGpio); 
-public native void jl_print_2();
+
+

@@ -1,0 +1,6 @@
+{
+    "java.project.referencedLibraries": [
+        "/opt/pi4j/lib/*.jar",
+        "/usr/share/java/jna.jar"
+    ]
+}

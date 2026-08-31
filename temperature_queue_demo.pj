@@ -1,0 +1,77 @@
+import std.*;
+
+/*
+ * A small scheduler example with three finite processes:
+ *
+ *   temperature sensor -> controller -> heater device
+ *          ^                              |
+ *          +----------- finished --------+
+ *
+ * Every channel read or write gives the ProcessJ scheduler another process
+ * to run.  No Raspberry Pi hardware is required.
+ */
+
+const int SAMPLE_COUNT = 6;
+const int TARGET_TEMPERATURE = 40;
+
+public void temperatureSensor(chan<int>.write temperatures,
+                              chan<boolean>.read finished) {
+    int samples[] = new int[]{ 35, 38, 42, 45, 39, 36 };
+
+    for (int sample = 0; sample < SAMPLE_COUNT; ++sample) {
+        println("[sensor] queue temperature " + samples[sample] + " C");
+        temperatures.write(samples[sample]);
+
+        // Wait until the heater has finished this job before measuring again.
+        finished.read();
+    }
+}
+
+public void temperatureController(chan<int>.read temperatures,
+                                  chan<int>.write heaterCommands) {
+    for (int sample = 0; sample < SAMPLE_COUNT; ++sample) {
+        int temperature = temperatures.read();
+        int command;
+
+        if (temperature < TARGET_TEMPERATURE) {
+            command = 1;
+            println("[controller] " + temperature + " C -> heater ON");
+        } else {
+            command = 0;
+            println("[controller] " + temperature + " C -> heater OFF");
+        }
+
+        heaterCommands.write(command);
+    }
+}
+
+public void heaterDevice(chan<int>.read heaterCommands,
+                         chan<boolean>.write finished) {
+    for (int job = 0; job < SAMPLE_COUNT; ++job) {
+        int command = heaterCommands.read();
+
+        if (command == 1) {
+            println("[heater] device is ON");
+        } else {
+            println("[heater] device is OFF");
+        }
+
+        finished.write(true);
+    }
+}
+
+public void main(string[] args) {
+    chan<int> temperatures;
+    chan<int> heaterCommands;
+    chan<boolean> finished;
+
+    println("Temperature queue demo started");
+
+    par {
+        temperatureSensor(temperatures.write, finished.read);
+        temperatureController(temperatures.read, heaterCommands.write);
+        heaterDevice(heaterCommands.read, finished.write);
+    }
+
+    println("PASS: all temperature jobs completed");
+}

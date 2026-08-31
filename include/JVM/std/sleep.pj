@@ -1,0 +1,8 @@
+#pragma LIBRARY;
+#pragma NATIVE;
+#pragma FILE "sleep";
+#pragma LANGUAGE "JVM";
+
+package std;
+
+public native void jl_sleep(int t);

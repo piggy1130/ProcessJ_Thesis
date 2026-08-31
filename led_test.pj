@@ -1,7 +1,30 @@
 import std.*;
 
+    // turnOnLed(4);
+    // turnOnLed(5);
+    // turnOnLed(13);
+    // turnOnLed(17);
+    // turnOnLed(6);
+    // turnOnLed(27);
 public void main(string[] args){
-    //rnOnLed(21);
-    turnOffLed(21);
-    
+    for (int i = 0; i<5; i++){
+        turnOnLed(4);
+        turnOnLed(5);
+        turnOnLed(13);
+        turnOnLed(17);
+        turnOnLed(6);
+        turnOnLed(27);
+        turnOnLed(27);
+
+        jl_sleep(1000);
+
+        turnOffLed(4);
+        turnOffLed(5);
+        turnOffLed(13);
+        turnOffLed(17);
+        turnOffLed(6);
+        turnOffLed(27);
+
+        jl_sleep(1000);
+    }
 }

@@ -1,0 +1,71 @@
+import std.*;
+
+public void T_measure(chan<boolean>.read in, chan<double>.write controlOut,
+                      chan<double>.write logOut){
+    // measure the temp & send as the start
+    double temp_manualCS_6 = readTemp_HwSPI_ManualCS(26);
+    //double temp_manualCS_6 = doubleRandom_0_to_50();
+    println("Measure temp:  " + temp_manualCS_6);
+    controlOut.write(temp_manualCS_6);
+    logOut.write(temp_manualCS_6);
+    
+    // start the loop  
+    while (true) {
+        in.read();
+        temp_manualCS_6 = readTemp_HwSPI_ManualCS(26);
+        //temp_manualCS_6 = doubleRandom_0_to_50();
+        println("Measure temp:  " + temp_manualCS_6);
+        //turnOnLed(17);
+        controlOut.write(temp_manualCS_6);
+        logOut.write(temp_manualCS_6);
+        //turnOffLed(17);
+    }
+}
+
+public void T_control(chan<double>.read temperatures, chan<boolean>.write in){
+    double t_curr;
+
+    while (true) {
+        t_curr = temperatures.read();
+        println("Get current temp:  " + t_curr);
+
+        if (40 - t_curr > 0 ){
+            // turn on baking for 5s
+            turnOnLed(27);                                                                  
+            jl_sleep(1000);
+            in.write(true);
+        }
+        else{
+            turnOffLed(27);
+            jl_sleep(1000);
+            in.write(true);
+        }
+    }
+}
+ 
+public void T_log(chan<double>.read temperatures){
+    string filename = "temperature_data.txt";
+    boolean append = false;
+    double temperature;
+
+    while (true) {
+        temperature = temperatures.read();
+        writeTemperature(filename, temperature, append);
+        append = true;
+    }
+}
+
+public void main(string[] args){
+    chan<double> controlTemperatures;
+    chan<double> logTemperatures;
+    chan<boolean> in;
+    
+    // ? Initialize Pi4J once BEFORE starting concurrent processes
+    initMAX31855();
+    
+    par{
+        T_measure(in.read, controlTemperatures.write, logTemperatures.write);
+        T_control(controlTemperatures.read, in.write);
+        T_log(logTemperatures.read);
+    }
+}
