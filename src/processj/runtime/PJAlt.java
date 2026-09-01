@@ -3,6 +3,9 @@ package processj.runtime;
 import java.util.ArrayList;
 import java.util.List;
 
+// new added
+import java.util.concurrent.ThreadLocalRandom;
+
 public class PJAlt {
     
     /** Can be skips, timers or channel-reads */
@@ -49,33 +52,84 @@ public class PJAlt {
         return dynamicAlts.get(index);
     }
     
+    // new added function
+    private int chooseFromReadySet(List<Integer> ready) {
+        if (ready.isEmpty()) {
+            return -1;
+        }
+
+        int position = ThreadLocalRandom.current().nextInt(ready.size());
+        return ready.get(position);
+    }
+
+
     @SuppressWarnings("rawtypes")
+
+    // Matt enable()
+    // public int enable() {
+    //     for (int i = 0; i < guards.size(); ++i) {
+    //         // If no boolean guard is ready then continue
+    //         if (!bguards.get(i))
+    //             continue;
+    //         // A skip?
+    //         if (guards.get(i) == PJAlt.SKIP) {
+    //             process.setReady();
+    //             return i;
+    //         }
+    //         // A channel?
+    //         if (guards.get(i) instanceof PJChannel) {
+    //             PJChannel chan = (PJChannel) guards.get(i);
+    //             if (chan.altGetWriter(process) != null) {
+    //                 process.setReady();
+    //                 return i;
+    //             }
+    //         }
+    //         // A timer?
+    //         if (guards.get(i) instanceof PJTimer) {
+    //             // TODO: Shouldn't this be formally verified??
+    //             PJTimer t = (PJTimer) guards.get(i);
+    //             if (t.getDelay() <= 0L) {
+    //                 process.setReady();
+    //                 t.expire();
+    //                 return i;
+    //             } else {
+    //                 try {
+    //                     t.start();
+    //                 } catch (InterruptedException e) {
+    //                     e.printStackTrace();
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     return -1;
+    // }
+    
     public int enable() {
+        List<Integer> ready = new ArrayList<>();
+
         for (int i = 0; i < guards.size(); ++i) {
-            // If no boolean guard is ready then continue
-            if (!bguards.get(i))
+            if (!bguards.get(i)) continue;
+
+            Object g = guards.get(i);
+
+            if (g == PJAlt.SKIP) {
+                ready.add(i);
                 continue;
-            // A skip?
-            if (guards.get(i) == PJAlt.SKIP) {
-                process.setReady();
-                return i;
             }
-            // A channel?
-            if (guards.get(i) instanceof PJChannel) {
-                PJChannel chan = (PJChannel) guards.get(i);
+
+            if (g instanceof PJChannel) {
+                PJChannel chan = (PJChannel) g;
                 if (chan.altGetWriter(process) != null) {
-                    process.setReady();
-                    return i;
+                    ready.add(i);
                 }
+                continue;
             }
-            // A timer?
-            if (guards.get(i) instanceof PJTimer) {
-                // TODO: Shouldn't this be formally verified??
-                PJTimer t = (PJTimer) guards.get(i);
+
+            if (g instanceof PJTimer) {
+                PJTimer t = (PJTimer) g;
                 if (t.getDelay() <= 0L) {
-                    process.setReady();
                     t.expire();
-                    return i;
+                    ready.add(i);
                 } else {
                     try {
                         t.start();
@@ -85,41 +139,87 @@ public class PJAlt {
                 }
             }
         }
-        return -1;
+
+        if (ready.isEmpty()) return -1;
+
+        process.setReady();
+        return chooseFromReadySet(ready); // random or round-robin
     }
-    
+
     @SuppressWarnings("rawtypes")
-    public int disable(int i) {
-        int selected = -1;
-        if (i == -1)
-            i = guards.size() - 1;
-        for (int j = i; j >= 0; --j) {
-            // If no boolean guard is ready then continue
-            if (!bguards.get(j))
+
+    // matt disable()
+    // public int disable(int i) {
+    //     int selected = -1;
+    //     if (i == -1)
+    //         i = guards.size() - 1;
+    //     for (int j = i; j >= 0; --j) {
+    //         // If no boolean guard is ready then continue
+    //         if (!bguards.get(j))
+    //             continue;
+    //         // A skip?
+    //         if (guards.get(j) == PJAlt.SKIP)
+    //             selected = j;
+    //         // A channel?
+    //         if (guards.get(j) instanceof PJChannel) { 
+    //             // No race condition on this channel as it is a one-to-one and only THIS
+    //             // process has access to it. This simply means that we are de-registering
+    //             // from the channel for now, but may still read from it if selected is not
+    //             // updated with a value < j.
+    //             PJChannel chan = (PJChannel) guards.get(j);
+    //             if (chan.setReaderGetWriter(null) != null)
+    //                 selected = j;
+    //         }
+    //         // A timer?
+    //         if (guards.get(j) instanceof PJTimer) {
+    //             // TODO: Shouldn't this be formally verified??
+    //             PJTimer timer = (PJTimer) guards.get(j);
+    //             if (timer.isExpired())
+    //                 selected = j;
+    //             else
+    //                 timer.kill();
+    //         }
+    //     }
+    //     return selected;
+    // }
+
+    public int disable(int chosen) {
+        List<Integer> stillReady = new ArrayList<>();
+
+        for (int j = guards.size() - 1; j >= 0; --j) {
+            if (!bguards.get(j)) continue;
+
+            Object g = guards.get(j);
+
+            if (g == PJAlt.SKIP) {
+                stillReady.add(j);
                 continue;
-            // A skip?
-            if (guards.get(j) == PJAlt.SKIP)
-                selected = j;
-            // A channel?
-            if (guards.get(j) instanceof PJChannel) { 
-                // No race condition on this channel as it is a one-to-one and only THIS
-                // process has access to it. This simply means that we are de-registering
-                // from the channel for now, but may still read from it if selected is not
-                // updated with a value < j.
-                PJChannel chan = (PJChannel) guards.get(j);
-                if (chan.setReaderGetWriter(null) != null)
-                    selected = j;
             }
-            // A timer?
-            if (guards.get(j) instanceof PJTimer) {
-                // TODO: Shouldn't this be formally verified??
-                PJTimer timer = (PJTimer) guards.get(j);
-                if (timer.isExpired())
-                    selected = j;
-                else
-                    timer.kill();
+
+            if (g instanceof PJChannel) {
+                PJChannel chan = (PJChannel) g;
+                if (chan.setReaderGetWriter(null) != null) {
+                    stillReady.add(j);
+                }
+                continue;
+            }
+
+            if (g instanceof PJTimer) {
+                PJTimer t = (PJTimer) g;
+                if (t.isExpired()) {
+                    stillReady.add(j);
+                } else {
+                    t.kill();
+                }
             }
         }
-        return selected;
+
+        if (chosen != -1 && stillReady.contains(chosen)) {
+            return chosen;
+        }
+
+        if (stillReady.isEmpty()) return -1;
+        return chooseFromReadySet(stillReady);
     }
+
 }
