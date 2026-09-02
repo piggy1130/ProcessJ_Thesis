@@ -52,6 +52,7 @@ public class PJAlt {
         return dynamicAlts.get(index);
     }
     
+    // *************************************************************************
     // new added function
     private int chooseFromReadySet(List<Integer> ready) {
         if (ready.isEmpty()) {
@@ -61,7 +62,7 @@ public class PJAlt {
         int position = ThreadLocalRandom.current().nextInt(ready.size());
         return ready.get(position);
     }
-
+    // *************************************************************************
 
     @SuppressWarnings("rawtypes")
 
@@ -105,6 +106,7 @@ public class PJAlt {
     // }
     
     public int enable() {
+
         List<Integer> ready = new ArrayList<>();
 
         for (int i = 0; i < guards.size(); ++i) {
@@ -143,7 +145,7 @@ public class PJAlt {
         if (ready.isEmpty()) return -1;
 
         process.setReady();
-        return chooseFromReadySet(ready); // random or round-robin
+        return chooseFromReadySet(ready); // random 
     }
 
     @SuppressWarnings("rawtypes")
