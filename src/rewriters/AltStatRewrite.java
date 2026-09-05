@@ -14,11 +14,89 @@ import utilities.PJBugManager;
 import utilities.PJMessage;
 import utilities.Visitor;
 import utilities.VisitorMessageNumber;
+import ast.Assignment;
+import ast.Expression;
 
 /**
  * @author ben
  */
 public class AltStatRewrite extends Visitor<AST> {
+
+    private void report(AST node, VisitorMessageNumber message) {
+        PJBugManager.INSTANCE.reportMessage(
+            new PJMessage.Builder()
+                .addAST(node)
+                .addError(message)
+                .build());
+    }
+
+    /*
+    * ProcessJ has no way to declare a procedure pure, so invocations are
+    * conservatively considered possible side effects.
+    */
+    private boolean containsPrioritySideEffect(AST node) {
+        if (node == null)
+            return false;
+
+        if (node instanceof Assignment ||
+            node instanceof Invocation ||
+            node instanceof ChannelReadExpr ||
+            node instanceof UnaryPostExpr) {
+            return true;
+        }
+
+        /*
+        * UnaryPreExpr also represents harmless operations such as -value,
+        * so reject only ++value and --value.
+        */
+        if (node instanceof UnaryPreExpr) {
+            int op = ((UnaryPreExpr) node).op();
+
+            if (op == UnaryPreExpr.PLUSPLUS ||
+                op == UnaryPreExpr.MINUSMINUS) {
+                return true;
+            }
+        }
+
+        if (node.children != null) {
+            for (int i = 0; i < node.nchildren; ++i) {
+                if (containsPrioritySideEffect(node.children[i]))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void validateNumericPriorities(AltStat as) {
+        boolean hasPriority = false;
+        boolean hasUnprioritizedGuard = false;
+
+        for (AltCase ac : as.body()) {
+            // Retained nested ALTs are handled separately.
+            if (ac.isAltStat())
+                continue;
+
+            if (ac.priority() == null)
+                hasUnprioritizedGuard = true;
+            else
+                hasPriority = true;
+        }
+
+        // This is a normal ALT with no numeric priorities.
+        if (!hasPriority)
+            return;
+
+        if (!as.isPri())
+            report(as, VisitorMessageNumber.REWRITE_1007);
+
+        if (as.isPri() && hasUnprioritizedGuard)
+            report(as, VisitorMessageNumber.REWRITE_1008);
+
+        if (as.isDynamic())
+            report(as, VisitorMessageNumber.REWRITE_1011);
+    }
+
 
     @Override
     public AST visitAltStat(AltStat as) {
@@ -52,6 +130,7 @@ public class AltStatRewrite extends Visitor<AST> {
                 newBody.append(se.child(i));
         }
         as.children[3] = newBody;
+        validateNumericPriorities(as);
         return (AST) null;
     }
 
@@ -89,8 +168,25 @@ public class AltStatRewrite extends Visitor<AST> {
                             .addError(VisitorMessageNumber.REWRITE_1003)
                             .build());
         }
+
+        Expression priority = ac.priority();
+
+        if (priority != null) {
+            /*
+            * The Yield rewrite has already run before AltStatRewrite,
+            * so doesYield() is valid here.
+            */
+            if (priority.doesYield()) {
+                report(priority, VisitorMessageNumber.REWRITE_1009);
+            } else if (containsPrioritySideEffect(priority)) {
+                report(priority, VisitorMessageNumber.REWRITE_1010);
+            }
+        }
+
+
         if (ac.isAltStat())
             ac.stat().visit(this);
+
         return (AST) null;
     }
 }

@@ -175,6 +175,9 @@ public class CodeGenJava extends Visitor<Object> {
     /** Jump label used when procedures yield */
     private int jumpLabel = 0;
 
+    /** Identifier shared by the generated guard lists for one ordinary ALT. */
+    private int altGuardSetID = 0;
+
     /** Access to protocol case */
     private boolean isProtocolCase = false;
 
@@ -1850,9 +1853,9 @@ public class CodeGenJava extends Visitor<Object> {
     ArrayList<String> listOfReplicatedAltLoops;
 
     int indexForAltStat;
-    int readyID;
-    int booleanGuardID;
-    int objectGuardID;
+    //int readyID;
+    //int booleanGuardID;
+    //int objectGuardID;
 
     @Override
     public Object visitAltStat(AltStat as) {
@@ -1866,9 +1869,9 @@ public class CodeGenJava extends Visitor<Object> {
         listOfReplicatedAltLoops = new ArrayList<>();
         
         indexForAltStat = 1;
-        readyID = 0;
-        booleanGuardID = 0;
-        objectGuardID = 0;
+        //readyID = 0;
+        //booleanGuardID = 0;
+        //objectGuardID = 0;
 
         // For dynamic or replicated alts we use 'AltGuard' objects, which contain
         // the indices of an n-array, where 'n' represents the number of loops to
@@ -2033,15 +2036,17 @@ public class CodeGenJava extends Visitor<Object> {
         // *******************************************************************
         // *******************************************************************
 
-        int currBooleanGuard = booleanGuardID;
-        booleanGuardID++;
-        int currObjectGuard = objectGuardID;
-        objectGuardID++;
+        //int currBooleanGuard = booleanGuardID;
+        //booleanGuardID++;
+        //int currObjectGuard = objectGuardID;
+        //objectGuardID++;
+        final int currentAltID = altGuardSetID++;
 
         ST stAltStat = stGroup.getInstanceOf("AltStat");
         ST stTimerLocals = stGroup.getInstanceOf("TimerLocals");
         ST stBooleanGuards = stGroup.getInstanceOf("BooleanGuards");
         ST stObjectGuards = stGroup.getInstanceOf("ObjectGuards");
+        ST stPriorityGuards = stGroup.getInstanceOf("PriorityGuards");
 
         Sequence<AltCase> cases = as.body();
         ArrayList<String> blocals = new ArrayList<>(); // Variables for pre-guard expressions
@@ -2049,6 +2054,27 @@ public class CodeGenJava extends Visitor<Object> {
         ArrayList<String> guards = new ArrayList<>(); // Guard statements
         ArrayList<String> altCases = new ArrayList<>();// Generated code for each alt-cases
         ArrayList<String> tlocals = new ArrayList<>(); // Timeouts
+        ArrayList<String> priorities = new ArrayList<>();
+        
+        boolean hasNumericPriorities = false;
+
+        /*
+        * Generate exactly one priority value per guard.
+        * Zero is a placeholder for ordinary ALT and legacy source-order PRI ALT.
+        */
+        for (int i = 0; i < cases.size(); ++i) {
+            AltCase ac = cases.child(i);
+
+            if (ac.priority() == null) {
+                priorities.add("0");
+            } else {
+                String renderedPriority =
+                        (String) ac.priority().visit(this);
+
+                priorities.add(renderedPriority.replace(DELIMITER, ""));
+                hasNumericPriorities = true;
+            }
+        }
 
         // Set boolean guards
         for (int i = 0; i < cases.size(); ++i) {
@@ -2071,8 +2097,12 @@ public class CodeGenJava extends Visitor<Object> {
         stBooleanGuards.add("locals", blocals);
 
         //
-        stBooleanGuards.add("readyID", booleanGuardID);
+        //stBooleanGuards.add("readyID", booleanGuardID);
+        stBooleanGuards.add("readyID", currentAltID);
         //
+
+        stPriorityGuards.add("values", priorities);
+        stPriorityGuards.add("altID", currentAltID);
 
         // Set case number for all AltCases
         for (int i = 0; i < cases.size(); ++i)
@@ -2109,7 +2139,7 @@ public class CodeGenJava extends Visitor<Object> {
         stObjectGuards.add("guards", guards);
 
         //
-        stObjectGuards.add("readyID", objectGuardID);
+        stObjectGuards.add("readyID", currentAltID);
         //
 
         // <--
@@ -2122,26 +2152,36 @@ public class CodeGenJava extends Visitor<Object> {
         paramToVarNames.put(newName, newName);
         // -->
 
+        final String selectionPolicy;
+
+        if (!as.isPri()) {
+            selectionPolicy = "PJAlt.SelectionPolicy.RANDOM";
+        } else if (hasNumericPriorities) {
+            selectionPolicy = "PJAlt.SelectionPolicy.NUMERIC";
+        } else {
+            selectionPolicy = "PJAlt.SelectionPolicy.SOURCE_ORDER";
+        }
+
         stAltStat.add("alt", newName);
         stAltStat.add("count", cases.size());
         stAltStat.add("timerLocals", stTimerLocals.render());
         stAltStat.add("initBooleanGuards", stBooleanGuards.render());
         stAltStat.add("initGuards", stObjectGuards.render());
-        stAltStat.add("bguards", "booleanGuards" + booleanGuardID);
-        stAltStat.add("guards", "objectGuards" + objectGuardID);
+
+        stAltStat.add("initPriorities", stPriorityGuards.render());
+        stAltStat.add("bguards", "booleanGuards" + currentAltID);
+        stAltStat.add("guards", "objectGuards" + currentAltID);
+        stAltStat.add("priorities", "priorityGuards" + currentAltID);
+        stAltStat.add("policy", selectionPolicy);
+
         stAltStat.add("jump", ++jumpLabel);
         stAltStat.add("cases", altCases);
         stAltStat.add("index", n.visit(this));
 
-        //
-        stAltStat.add("readyID", readyID);
-        //
+        stAltStat.add("readyID", currentAltID); 
 
         // Add the jump label to the switch-stmt list
         switchCases.add(renderSwitchCase(jumpLabel));
-        readyID++;
-        booleanGuardID = currBooleanGuard;
-        objectGuardID = currObjectGuard;
 
         return stAltStat.render();
     }
@@ -2222,6 +2262,7 @@ public class CodeGenJava extends Visitor<Object> {
         varDecID = 0;
         localDecID = 0;
         jumpLabel = 0;
+        altGuardSetID = 0;
 
         localToFields.clear();
         switchCases.clear();

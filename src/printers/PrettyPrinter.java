@@ -98,20 +98,31 @@ public class PrettyPrinter<T extends AST> extends Visitor<T> {
 
 	public T visitAltCase(AltCase ac) {
 		System.out.print(tab());
+
+		if (ac.priority() != null) {
+			System.out.print("pri(");
+			ac.priority().visit(this);
+			System.out.print(") ");
+		}
+
 		if (ac.precondition() != null) {
 			System.out.print("(");
 			ac.precondition().visit(this);
 			System.out.print(") && ");
 		}
+
 		ac.guard().visit(this);
 		System.out.print(" : ");
+
 		indent += 2;
 		ac.stat().visit(this);
+		indent -= 2;
+
 		return null;
 	}
 
 	public T visitAltStat(AltStat as) {
-		p("alt {");
+		p((as.isPri() ? "pri " : "") + "alt {");
 		indent += 2;
 		as.visitChildren(this);
 		indent -= 2;

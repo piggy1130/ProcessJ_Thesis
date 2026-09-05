@@ -5,6 +5,7 @@ import java.util.List;
 
 // new added
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.Collections;
 
 public class PJAlt {
     
@@ -21,6 +22,18 @@ public class PJAlt {
     
     public static final String SKIP = "skip";
     
+    public enum SelectionPolicy {
+        RANDOM,
+        SOURCE_ORDER,
+        NUMERIC
+    }
+
+    /** Snapshot containing one priority for every guard. */
+    private List<Integer> priorities = Collections.emptyList();
+
+    /** Selection behavior for this ALT. */
+    private SelectionPolicy selectionPolicy = SelectionPolicy.RANDOM;
+
     public PJAlt(PJProcess p) {
         process = p;
         guards = new ArrayList<>();
@@ -33,14 +46,86 @@ public class PJAlt {
         bguards = new ArrayList<>(count);
     }
     
-    public boolean setGuards(List<Boolean> bguards, List<Object> guards) {
+    // public boolean setGuards(List<Boolean> bguards, List<Object> guards) {
+    //     this.guards = guards;
+    //     this.bguards = bguards;
+        
+    //     for (Boolean b : bguards)
+    //         if (b.booleanValue())
+    //             return true;
+        
+    //     return false;
+    // }
+
+    /*
+    * Keep the old API for replicated ALTs and previously generated code.
+    */
+    public boolean setGuards(
+            List<Boolean> bguards,
+            List<Object> guards) {
+
+        if (guards == null) {
+            throw new IllegalArgumentException(
+                "ALT guards cannot be null");
+        }
+
+        return setGuards(
+            bguards,
+            guards,
+            Collections.nCopies(
+                guards.size(),
+                Integer.valueOf(0)),
+            SelectionPolicy.RANDOM);
+    }
+
+    /*
+    * Store the guards, priorities, and selection policy.
+    */
+    public boolean setGuards(
+            List<Boolean> bguards,
+            List<Object> guards,
+            List<Integer> priorities,
+            SelectionPolicy selectionPolicy) {
+
+        if (bguards == null ||
+            guards == null ||
+            priorities == null ||
+            selectionPolicy == null) {
+
+            throw new IllegalArgumentException(
+                "ALT guards, priorities, and selection policy cannot be null");
+        }
+
+        if (bguards.size() != guards.size() ||
+            priorities.size() != guards.size()) {
+
+            throw new IllegalArgumentException(
+                "ALT boolean guards, guards, and priorities must have the same size");
+        }
+
+        for (Integer priority : priorities) {
+            if (priority == null) {
+                throw new IllegalArgumentException(
+                    "ALT priority values cannot be null");
+            }
+        }
+
         this.guards = guards;
         this.bguards = bguards;
-        
-        for (Boolean b : bguards)
-            if (b.booleanValue())
+
+        /*
+        * Copy the priorities so they remain unchanged while the ALT
+        * enables, yields, and disables its guards.
+        */
+        this.priorities = new ArrayList<>(priorities);
+        this.selectionPolicy = selectionPolicy;
+
+        for (Boolean b : bguards) {
+            if (b.booleanValue()) {
                 return true;
-        
+            }
+        }
+
         return false;
     }
     
@@ -52,18 +137,76 @@ public class PJAlt {
         return dynamicAlts.get(index);
     }
     
-    // *************************************************************************
-    // new added function
+    // // *************************************************************************
+    // // new added function
+    // private int chooseFromReadySet(List<Integer> ready) {
+    //     if (ready.isEmpty()) {
+    //         return -1;
+    //     }
+
+    //     int position = ThreadLocalRandom.current().nextInt(ready.size());
+    //     return ready.get(position);
+    // }
+    // // *************************************************************************
+
+    
     private int chooseFromReadySet(List<Integer> ready) {
         if (ready.isEmpty()) {
             return -1;
         }
 
-        int position = ThreadLocalRandom.current().nextInt(ready.size());
-        return ready.get(position);
-    }
-    // *************************************************************************
+        switch (selectionPolicy) {
+            case SOURCE_ORDER: {
+                int selected = ready.get(0);
 
+                /*
+                * A smaller index means the guard appeared earlier
+                * in the ProcessJ source.
+                */
+                for (int candidate : ready) {
+                    if (candidate < selected) {
+                        selected = candidate;
+                    }
+                }
+
+                return selected;
+            }
+
+            case NUMERIC: {
+                int selected = ready.get(0);
+                int selectedPriority = priorities.get(selected);
+
+                for (int candidate : ready) {
+                    int candidatePriority = priorities.get(candidate);
+
+                    /*
+                    * Larger numbers have higher priority.
+                    * Equal values are resolved by source order.
+                    */
+                    if (candidatePriority > selectedPriority ||
+                        (candidatePriority == selectedPriority &&
+                        candidate < selected)) {
+
+                        selected = candidate;
+                        selectedPriority = candidatePriority;
+                    }
+                }
+
+                return selected;
+            }
+
+            case RANDOM:
+            default: {
+                int position =
+                    ThreadLocalRandom.current().nextInt(ready.size());
+
+                return ready.get(position);
+            }
+        }
+    }
+    
+    
+    
     @SuppressWarnings("rawtypes")
 
     // Matt enable()
@@ -145,7 +288,7 @@ public class PJAlt {
         if (ready.isEmpty()) return -1;
 
         process.setReady();
-        return chooseFromReadySet(ready); // random 
+        return chooseFromReadySet(ready); 
     }
 
     @SuppressWarnings("rawtypes")
@@ -216,12 +359,28 @@ public class PJAlt {
             }
         }
 
-        if (chosen != -1 && stillReady.contains(chosen)) {
-            return chosen;
-        }
+        // if (chosen != -1 && stillReady.contains(chosen)) {
+        //     return chosen;
+        // }
 
-        if (stillReady.isEmpty()) return -1;
-        return chooseFromReadySet(stillReady);
+        // if (stillReady.isEmpty()) return -1;
+        // return chooseFromReadySet(stillReady);
+    /*
+    * Preserve an initial random choice if it remains ready.
+    *
+    * Prioritized modes must reconsider all currently ready guards:
+    * a higher-priority guard may have become ready during yield().
+    */
+    if (selectionPolicy == SelectionPolicy.RANDOM &&
+        chosen != -1 &&
+        stillReady.contains(chosen)) {
+
+        return chosen;
+    }
+
+    return chooseFromReadySet(stillReady);
+    
+    
     }
 
 }

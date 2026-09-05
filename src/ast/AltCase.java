@@ -13,19 +13,27 @@ public class AltCase extends AST {
     private String tempTimerName = null;
     public boolean isAltStat = false;
     
-    /* expr can be null */
+    /* Precondition and priority can be null. */
     public AltCase(Expression expr, Guard guard, Statement stat) {
-        super(guard);
-        nchildren = 3;
-        children = new AST[] { expr, guard, stat };
+        this(expr, guard, stat, null);
     }
 
-    /* an alt case can be another alt (this will get rewritten later) */
+    public AltCase(
+            Expression expr,
+            Guard guard,
+            Statement stat,
+            Expression priority) {
+        super(guard);
+        nchildren = 4;
+        children = new AST[] { expr, guard, stat, priority };
+    }
+
+    /* An alt case can be another alt. */
     public AltCase(AltStat stat) {
-	super(stat);
-	nchildren = 3;
-	isAltStat = true;
-	children = new AST[] { null, null, stat };
+        super(stat);
+        nchildren = 4;
+        isAltStat = true;
+        children = new AST[] { null, null, stat, null };
     }
     
     public Expression precondition() {
@@ -39,6 +47,11 @@ public class AltCase extends AST {
     public Statement stat() {
         return (Statement) children[2];
     }
+
+    public Expression priority() {
+        return (Expression) children[3];
+    }
+
 
     public boolean isAltStat() {
 	return isAltStat;

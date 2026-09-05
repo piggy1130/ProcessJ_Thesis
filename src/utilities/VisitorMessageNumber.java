@@ -131,6 +131,7 @@ public enum VisitorMessageNumber implements MessageNumber {
     TYPE_CHECKER_657(657, ErrorSeverity.ERROR, MessageType.PRINT_STOP),
     TYPE_CHECKER_658(658, ErrorSeverity.ERROR, MessageType.PRINT_STOP),
     TYPE_CHECKER_659(659, ErrorSeverity.ERROR, MessageType.PRINT_STOP),
+    TYPE_CHECKER_662(662, ErrorSeverity.ERROR, MessageType.PRINT_STOP),
 
     // --------------------------------------------------
     // PARALLEL USAGE CHECKER (700-799)
@@ -187,8 +188,13 @@ public enum VisitorMessageNumber implements MessageNumber {
     REWRITE_1003(1003, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
     REWRITE_1004(1004, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
     REWRITE_1005(1005, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
-    REWRITE_1006(1006, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE)
-
+    REWRITE_1006(1006, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
+    REWRITE_1007(1007, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
+    REWRITE_1008(1008, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
+    REWRITE_1009(1009, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
+    REWRITE_1010(1010, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE),
+    REWRITE_1011(1011, ErrorSeverity.ERROR, MessageType.PRINT_CONTINUE)
+    
     ;
 
     

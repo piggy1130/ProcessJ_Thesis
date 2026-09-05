@@ -768,12 +768,14 @@ case <number>:
 // 8.) jump:
 // 9.) cases:
 // 10.) index:
-AltStat(alt, count, timerLocals, initBooleanGuards, initGuards, bguards, guards, jump, cases, index, readyID) ::= <<
+
+AltStat(alt, count, timerLocals, initBooleanGuards, initGuards, initPriorities, bguards, guards, priorities, policy, jump, cases, index, readyID) ::= <<
 <alt> = new PJAlt(<count>, this);
 <timerLocals>
 <initBooleanGuards>
 <initGuards>
-boolean ready<readyID> = <alt>.setGuards(<bguards>, <guards>);
+<initPriorities>
+boolean ready<readyID> = <alt>.setGuards(<bguards>, <guards>, <priorities>, <policy>);
 
 if (!ready<readyID>) {
     System.out.println("RuntimeError: One of the boolean pre-guards must be true!");
@@ -795,6 +797,7 @@ switch(selected<readyID>) {
 }
 >>
 
+
 //========================================================================================
 //
 // 1.) locals:
@@ -813,6 +816,13 @@ ObjectGuards(guards, readyID) ::= <<
 <if(guards)>Object[] __objectGuards<readyID> = { <guards; separator=", "> };
 List\<Object> objectGuards<readyID> = Arrays.asList(__objectGuards<readyID>);
 <endif>
+>>
+
+//========================================================================================
+// One numeric priority value for every ALT guard.
+PriorityGuards(values, altID) ::= <<
+Integer[] __priorityGuards<altID> = { <values; separator=", "> };
+List\<Integer> priorityGuards<altID> = Arrays.asList(__priorityGuards<altID>);
 >>
 
 //========================================================================================
@@ -860,6 +870,8 @@ switch(selected) {
         break;
 }
 >>
+
+
 
 //
 // 1.) indexSet

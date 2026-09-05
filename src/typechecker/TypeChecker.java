@@ -82,6 +82,26 @@ public class TypeChecker extends Visitor<Type> {
     public Type visitAltCase(AltCase ac) {
         Log.log(ac.line + ": Visiting an alt case.");
 
+        // Check the numeric priority - A numeric ALT priority must have exactly type int.
+        if (ac.priority() != null) {
+            Type priorityType = ac.priority().visit(this);
+
+            if (priorityType != null) {
+                priorityType = resolve(priorityType);
+
+                if (!priorityType.isErrorType() &&
+                    !priorityType.isIntegerType()) {
+                    PJBugManager.INSTANCE.reportMessageAndExit(
+                        new PJMessage.Builder()
+                            .addAST(ac.priority())
+                            .addError(VisitorMessageNumber.TYPE_CHECKER_662)
+                            .addArguments(priorityType.typeName())
+                            .build(),
+                        MessageType.PRINT_CONTINUE);
+                }
+            }
+        }
+
         // Check the pre-condition if there is one.
         if (ac.precondition() != null) {
             Type t = ac.precondition().visit(this);
@@ -93,9 +113,11 @@ public class TypeChecker extends Visitor<Type> {
             // .addArguments(t.typeName())
             // .build(), MessageType.PRINT_CONTINUE);
         }
-	// guard is only null if the case is a nested alt.
-	if (ac.guard() != null)
-	    ac.guard().visit(this);
+
+        // guard is only null if the case is a nested alt.
+        if (ac.guard() != null)
+            ac.guard().visit(this);
+            
         ac.stat().visit(this);
         return null;
     }
